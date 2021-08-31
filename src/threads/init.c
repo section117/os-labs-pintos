@@ -134,6 +134,53 @@ pintos_init (void)
     run_actions (argv);
   } else {
     // TODO: no command line passed to kernel. Run interactively 
+    printf("Hello World\n");
+    while(1){
+      char *buffer = (char*) (malloc(100*sizeof(char)));
+      printf("cs2042 > ");
+
+      char charachter;
+      int i = 0;
+      while(charachter = input_getc()){
+        if(charachter == 13){
+          break;
+
+        }else if(charachter == 8){
+          printf("\b \b");
+          buffer[i--] = NULL;
+          continue;
+        }
+
+        printf("%c",charachter);
+        buffer[i++] = charachter;
+
+      }
+      printf("\n");
+
+      buffer[i] = NULL;
+
+      if(strcmp("whoami",buffer) == 0){
+        printf("Nimantha K G D - 190416N\n");
+      }else if (strcmp("shutdown",buffer) == 0){
+        printf("Shutting down...\n");
+        shutdown_power_off();
+      }else if(strcmp("time",buffer) == 0){
+        double *time = rtc_get_time();
+        printf("Number of seconds passed since Unix epoch -> %d\n", time);
+      }else if(strcmp("ram",buffer) == 0){
+        printf("RAM available for the OS -> %'"PRIu32" kB\n", init_ram_pages * PGSIZE / 1024);
+      }else if(strcmp("thread",buffer) == 0){
+        thread_print_stats();
+      }else if(strcmp("priority",buffer) == 0){
+        printf("The priority of current thread -> %d\n", thread_get_priority());
+      }else if(strcmp("exit",buffer) == 0){
+        printf("Exiting the Interactive Shell\n");
+        break;
+      }else{
+        printf("Unknown command - %s\n", buffer);
+      }
+
+    }
   }
 
   /* Finish up. */
