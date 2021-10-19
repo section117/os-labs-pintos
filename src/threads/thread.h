@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <kernel/list.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -98,6 +99,8 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
 #endif
 
+   int64_t waketick;
+
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
@@ -137,5 +140,13 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+//This function will compare waketicks of two given threads
+bool compare_waketick(const struct list_elem *first, const struct list_elem *second, void *aux);
+
+//This function will compare two priorities in threads
+bool compare_thread_priorities (const struct list_elem *a,
+                             const struct list_elem *b,
+                             void *aux);
 
 #endif /* threads/thread.h */

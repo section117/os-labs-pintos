@@ -20,6 +20,9 @@
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
+//The sleep list
+struct list sleep_list;
+
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
@@ -37,6 +40,8 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+  //Initialize sleep_list
+  list_init(&sleep_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -84,16 +89,38 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
+// bool cmp_waketick(const struct list_elem *first_t, const struct list_elem *second_t, void *aux){
+//   struct thread *first_thread = list_entry (first_t, struct thread, elem);
+//   struct thread *second_thread = list_entry (second_t, struct thread, elem);
+
+//   return first_thread->waketick < second_thread->waketick;
+// }
+
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
+  //int64_t start = timer_ticks ();
+
+  struct thread* current_thread;
+	enum intr_level current_level;
 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  //while (timer_elapsed (start) < ticks) 
+  //  thread_yield ();
+
+  current_level = intr_disable();
+  current_thread = thread_current();
+
+  current_thread->waketick = timer_ticks() + ticks;
+
+  list_insert_ordered(&sleep_list, &current_thread->elem, compare_waketick, NULL);
+
+  thread_block();
+
+  intr_set_level(current_level);
+  
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -170,8 +197,24 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
+  struct list_elem *head;
+	struct thread *hthread;
+
   ticks++;
-  thread_tick ();
+  thread_tick();
+
+  while(!list_empty(&sleep_list))
+	{
+		head = list_front(&sleep_list);
+	  hthread = list_entry (head, struct thread, elem);
+
+	  	if(hthread->waketick > ticks )
+	  		break;
+
+	  	list_remove (head);
+	  	thread_unblock(hthread);
+	}
+
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
