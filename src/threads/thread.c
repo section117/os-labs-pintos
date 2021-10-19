@@ -148,6 +148,10 @@ thread_print_stats (void)
 }
 
 
+void sort_ready_list(){
+  list_sort(&ready_list, compare_thread_priorities, NULL);
+}
+
 bool compare_thread_priorities (const struct list_elem *a, const struct list_elem *b, void *aux){
     struct thread *a_thread = list_entry (a, struct thread, elem);
     struct thread *b_thread = list_entry (b, struct thread, elem);
@@ -363,28 +367,43 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  //thread_current ()->priority = new_priority;
+  thread_current ()->original_priority = new_priority;
 
-  enum intr_level old_level;
 
-  old_level = intr_disable ();
-
-  if(!list_empty(&ready_list))
-  {
-    struct list_elem *first_thread = list_front(&ready_list);
-    struct thread *f_thread = list_entry (first_thread, struct thread, elem);
-
-    if(f_thread->priority > thread_current ()->priority)
-      thread_yield();
+  if(list_empty( &thread_current()->donators)){
+    thread_current ()->priority = new_priority;
+  }else {
+    struct thread *max_t = list_entry(list_front(&thread_current()->donators), struct thread, d_element);
+    thread_current ()->priority = max_t->priority;
   }
 
-  intr_set_level (old_level);
+  if(new_priority > thread_current ()->priority){
+    thread_current ()->priority = new_priority;
+  }
+
+  // enum intr_level old_level;
+
+  // old_level = intr_disable ();
+
+  // if(!list_empty(&ready_list))
+  // {
+  //   struct list_elem *first_thread = list_front(&ready_list);
+  //   struct thread *f_thread = list_entry (first_thread, struct thread, elem);
+
+  //   if(f_thread->priority > thread_current ()->priority)
+  //     thread_yield();
+  // }
+
+  // intr_set_level (old_level);
+  thread_yield();
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
+  //printf("ttp - %d\n", &thread_current ()->priority);
   return thread_current ()->priority;
 }
 
@@ -494,6 +513,7 @@ is_thread (struct thread *t)
 static void
 init_thread (struct thread *t, const char *name, int priority)
 {
+  //printf("init_thread - before - %d\n", priority);
   enum intr_level old_level;
 
   ASSERT (t != NULL);
@@ -505,11 +525,14 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  list_init (&t->donators);
+  t->original_priority = priority;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
+  //printf("init_thread - original - %d\n", t->original_priority);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

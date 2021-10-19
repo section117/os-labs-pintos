@@ -101,6 +101,11 @@ struct thread
 
    int64_t waketick;
 
+   //The donators list
+   struct list donators;
+   struct list_elem d_element;
+   int original_priority;
+
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
@@ -141,6 +146,7 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+void sort_ready_list();
 //This function will compare waketicks of two given threads
 bool compare_waketick(const struct list_elem *first, const struct list_elem *second, void *aux);
 
