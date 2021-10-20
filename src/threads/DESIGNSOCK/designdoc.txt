@@ -20,26 +20,65 @@
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+In thread.h file, 
+int64_t waketick; was added to keep track of the waiting time while the thread is sleeping.
+
+bool compare_waketick(const struct list_elem *first, const struct list_elem *second, void *aux);
+//This was added to compare two threads by their waketick;
+
+---------------------------------------
+
+In timer.c file,
+struct list sleep_list; was added to keep a list of sleeping threads
+
+void timer_sleep (int64_t ticks) {}; implementation was changed, so that busy waiting is removed.
+Now the thread will be inserted to the sleep_list (In sort order) and thread will be blocked.
+
+static void timer_interrupt (struct intr_frame *args UNUSED){}; implementation was changed, so that,
+when the waketick is expired the sleeping thread will be removed and unblocked and pushed to the ready_list.
+
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
 
+When it is called, the waketick value will be calculated and the thread will be put into the
+sleeping_list (in sorting order), then the thread will be blocked.
+In interrupt_handler, waketick expired threads will be removed from the sleep_list, unblock them and
+pushed those threads back to ready list.
+
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+
+1) When threads are inserted to the sleep_list they are inserted in the
+sorting order (lowest waketick threads first). So that when interrupt_handler check
+for expired threads, it only has to remove the elements from the front of the sleep_list.
+This is more efficient than iterating the whole sleep_list.
+
+2) While removing elements from the front of the list, the loop will break once
+all the expired waketick threads are removed, thus reducing time spent in interrupt_handler.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
+Interrupts are disabled while the waketick is calculated and put into sleep_list.
+So race conditions will not occur.
+
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+
+Interrupts are off in timer_sleep().
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+This design is efficient because busy waiting has been avoided.
+Also, implementation is easy, since list inserts have been provided.
 
 			 PRIORITY SCHEDULING
 			 ===================
