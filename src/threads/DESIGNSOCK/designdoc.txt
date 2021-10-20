@@ -89,6 +89,14 @@ Also, implementation is easy, since list inserts have been provided.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+In thread.h file,
+
+struct list donators; //keep track of donor thread list (Threads that can donate priority to this thread)
+struct list_elem d_element; //keep track of donors list element
+int original_priority; //This will store the original priority of thread
+bool compare_thread_priorities (const struct list_elem *a,const struct list_elem *b,void *aux);//This will
+compare two threads based on their priority.
+
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
 >> .png file.)
@@ -98,11 +106,34 @@ Also, implementation is easy, since list inserts have been provided.
 >> B3: How do you ensure that the highest priority thread waiting for
 >> a lock, semaphore, or condition variable wakes up first?
 
+When inserting threads to waiting lists, do that in sorting order where
+highest priority thread is at the front. And pop the first element when needed.
+
+Lock - lock->semaphore->waiters
+Semaphore - semaphore->waiters
+Condition - condition->waiters
+
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
 
+When lock_acquire is called, if that lock already has a holder, then the current_thread
+will be inserted o the donators_list of holder. Now, if the prority of holder is lower than
+the maximum priority of donators_list, that maximum priority will be assigned as the holder priority.
+
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
+
+1) The threads that acted as donors when the lock was acquired, will be removed from the donators_list
+of the current_thread.
+2) Now, the highest_priority thread from the donators_list will be set as the new priority of
+the current_thread if (lock->holder->donators_list is not empty). (This means this thread has
+acquired other locks. So the threads that are waiting for these locks can still donate priority
+ to the current_thread)
+3) if (lock->holder->donators_list is empty), that means this thread has not any acquired locks.
+So there are no threads to donate priority to this thread. In this case original_priority is set
+ as the priority.
+4) then lock->holder is set to as null and sema_up() is called.
+5) In sema_up(), the highest_priority waiting thread is selected and unblocked.
 
 ---- SYNCHRONIZATION ----
 
@@ -110,10 +141,19 @@ Also, implementation is easy, since list inserts have been provided.
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
+Priority in a thread can be changed in two ways.
+	1) calling thread_set_priority()
+	2) Change thread_priority during priority donations
+
+No, lock cannot be used because interrupt handler cannot acquire locks. 
+
 ---- RATIONALE ----
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+This design is easy to implement and simple. Also it is easy to maintain a list of donors,
+so we can easily handle priority donations.
 
 			   SURVEY QUESTIONS
 			   ================
