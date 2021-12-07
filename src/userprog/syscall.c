@@ -29,6 +29,7 @@ bool remove(const char *file);
 void close(int fd);
 int open(const char *file);
 int read(int fd, void *buffer, unsigned size);
+pid_t exec(const char* cmd_line);
 
 
 
@@ -48,6 +49,16 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   switch (number)
   {
+
+  case SYS_EXEC: {
+    char* cmd_line;
+    
+    if(isValidUser(f->esp + 4, &cmd_line, sizeof(cmd_line)) == -1) {
+      exit(-1);
+    }
+    f->eax =  exec(cmd_line);
+    break;
+  }
   case SYS_HALT:{
     halt();
     break;
@@ -176,6 +187,11 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 
   case SYS_CLOSE: {
+    int fd;
+    if(isValidUser(f->esp + 4, &fd, sizeof(fd)) == -1) {
+      exit(-1);
+    }
+    close(fd);
     break;
   }
 
@@ -404,6 +420,18 @@ int read(int fd, void *buffer, unsigned size){
   lock_release(&locker);
 
   return -1;
+}
+
+pid_t exec(const char* cmd_line) {
+  if(!cmd_line)
+	{
+		return -1;
+	}
+  
+  /* Get and return the PID of the process that is created. */
+	pid_t child_tid = process_execute(cmd_line);
+  
+	return child_tid;
 }
 
 
