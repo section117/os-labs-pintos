@@ -27,6 +27,7 @@ unsigned tell(int fd);
 bool create(const char *file, unsigned initial_size);
 bool remove(const char *file);
 void close(int fd);
+int open(const char *file);
 
 
 
@@ -126,6 +127,11 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 
   case SYS_OPEN: {
+    char* file;
+    if(isValidUser(f->esp + 4, &file, sizeof(file)) == -1) {
+      exit(-1);
+    }
+    f->eax = (uint32_t)open(file);
     break;
   }
   
@@ -300,6 +306,39 @@ void close(int fd) {
   list_remove(&file_des->elem);
   free(file_des);
   lock_release(&locker); 
+}
+
+int open(const char *file){
+
+  if(!file) return -1;
+
+  lock_acquire(&locker;
+
+  struct file* f = filesys_open(file);
+
+  /* If no file was created, then return -1. */
+  if(f == NULL)
+  {
+    lock_release(&lock_filesys);
+    return -1;
+  }
+
+  /* Create a struct to hold the file/fd, for use in a list in the current process.
+     Increment the fd for future files. Release our lock and return the fd as an int. */
+  struct file_descripter *new_file = malloc(sizeof(struct file_descripter));
+  new_file->file = f;
+  struct list* file_list = &thread_current()->file_list;
+  if(list_empty(file_list)){
+    new_file->id = 3;
+  }else{
+    struct file_desctripter* file_des = list_entry(list_end(file_list), struct file_descripter, elem);
+    new_file->id = file_des->id + 1;
+  }
+  
+  list_push_back(file_list, &new_file->elem);
+  lock_release(&locker);
+
+  return new_file->id;
 }
 
 
