@@ -466,6 +466,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
 #ifdef USERPROG
   list_init(&t->file_list);
+  list_init(&t->pcb_list);
   
 #endif
 

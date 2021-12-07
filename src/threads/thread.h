@@ -99,6 +99,8 @@ struct thread
 
 
     struct list file_list;
+    struct list pcb_list;
+    struct process_control_block* t_pcb;
 #endif
 
     /* Owned by thread.c. */

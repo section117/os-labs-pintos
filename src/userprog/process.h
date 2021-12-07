@@ -2,6 +2,9 @@
 #define USERPROG_PROCESS_H
 
 #include "threads/thread.h"
+#include "threads/synch.h"
+typedef int pid_t;
+
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
@@ -14,6 +17,23 @@ struct file_descripter
     struct list_elem elem;
     struct file* file;
     
+};
+
+struct  process_control_block 
+{
+  pid_t pid;                
+
+  const char* cmdline;      
+  struct list_elem elem;    
+  struct thread* parent_thread;   
+  bool waiting;            
+  bool exited;             
+//   bool orphan;              
+  int32_t exitcode;        
+
+  struct semaphore sema_initialization; 
+  struct semaphore sema_wait; 
+
 };
 
 

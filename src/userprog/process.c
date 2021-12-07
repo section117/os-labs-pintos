@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -26,19 +27,43 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
+  
 
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  char *token_string, *save_ptr;
+  char *token_string;
+  char *save_ptr;
   token_string =strtok_r (file_name, " ", &save_ptr); 
-  
 
-  tid = thread_create (token_string, PRI_DEFAULT, start_process, fn_copy);
+  struct process_control_block* pcb = palloc_get_page(0);
+
+  pcb->pid = -1;
+  pcb->parent_thread = thread_current();
+
+  sema_init(&pcb->sema_initialization, 0);
+  sema_init(&pcb->sema_wait, 0);
+
+  pcb->waiting = false;
+  pcb->exited = false;
+  // pcb->orphan = false;
+
+  pcb->cmdline = fn_copy;
+
+
+  tid = thread_create (token_string, PRI_DEFAULT, start_process, pcb);
+  
+  sema_down(&pcb->sema_initialization);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  if (tid == -1){
+    palloc_free_page (pcb);
+    return -1;
+  }
+  list_push_back(&thread_current()->pcb_list, &pcb->elem); 
   return tid;
 }
 
@@ -46,12 +71,14 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  char *file_name = file_name_;
+  struct process_control_block* pcb = file_name_;
+
+  char *file_name = pcb->cmdline;
   struct intr_frame if_;
   bool success;
 
   
-  char *parse_args[30];
+  char *parse_args[50];
   char counter = 0;
   char *token,*save_ptr;
 
@@ -68,10 +95,16 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
 
   
-  argument_stack(parse_args,counter,&if_.esp);
+  if (success) {
+    pcb->pid = thread_current()->tid;
+    thread_current()->t_pcb = pcb; 
+    arg_stack_call(parse_args,counter,&if_.esp);
+  }
 
   
-  palloc_free_page (file_name);
+  sema_up(&pcb->sema_initialization);
+
+  // palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
 
@@ -87,24 +120,20 @@ start_process (void *file_name_)
 
 
 
-  argument_stack(char **args,int count,void **esp){
+  arg_stack_call(char **arguments,int count,void **esp){
     
 
 
-    int arg_addrs[count];
-    int length;
+    int arg_address[count];
+    int size;
     for (int i =count-1 ;i>=0;i--)
     {
       
-      length  = strlen(args[i])+1;
-
-      *esp -= length;
-
-    
-      memcpy(*esp,args[i],length);
-
-    
-      arg_addrs[i] = (int)*esp;
+      size  = strlen(arguments[i])+1;
+      *esp -= size;
+      memcpy(*esp,arguments[i],size);
+      arg_address[i] = (int)*esp;
+      
     }  
 
     
@@ -115,7 +144,7 @@ start_process (void *file_name_)
       for (int i=count-1; i>=0;i--){
         
         *esp -= 4;
-        *(int*)*esp = arg_addrs[i];
+        *(int*)*esp = arg_address[i];
       }
 
     
@@ -146,14 +175,28 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  int value = 0;
-  for(int i = 0 ; i < 300000000; i++){
-    value ++;
-  }
-  // while(1){
+  struct list* pcb_list = &thread_current()->pcb_list;
 
-  // }
-  return 0;
+  struct list_elem* e;
+  struct process_control_block* pcb;
+
+  for (e = list_begin (pcb_list); e != list_end (pcb_list); e = list_next (e)){
+    pcb = list_entry(e, struct process_control_block, elem);
+    if(pcb->pid == child_tid) break;
+  }
+
+  if(pcb == NULL || pcb->pid != child_tid || pcb->waiting || pcb->exited) return -1;
+
+
+
+  pcb->waiting = true;
+
+  sema_down(&pcb->sema_wait);
+
+  list_remove(&pcb->elem);
+
+  return pcb->exitcode;
+
 }
 
 /* Free the current process's resources. */
@@ -162,6 +205,25 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  struct list* pcb_list = &cur->pcb_list;
+  struct process_control_block* pcb;
+  while(!list_empty(pcb_list)) {
+    pcb = list_pop_back(pcb_list);
+
+    if(!pcb->exited){
+      pcb->parent_thread = NULL;
+    }else{
+      palloc_free_page(pcb);
+    }
+  }
+  if(cur->t_pcb != NULL){
+    cur->t_pcb->exited = true;
+    sema_up(&cur->t_pcb->sema_wait);
+
+    if(cur->t_pcb->parent_thread == NULL)
+      palloc_free_page(cur->t_pcb);
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

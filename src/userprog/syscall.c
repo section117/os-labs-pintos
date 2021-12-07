@@ -9,6 +9,7 @@
 #include "threads/synch.h"
 #include "filesys/filesys.h"
 #include "threads/malloc.h"
+#include "threads/vaddr.h"
 
 typedef int pid_t;
 
@@ -122,10 +123,6 @@ syscall_handler (struct intr_frame *f UNUSED)
     char* file;
     unsigned initial_size;
 
-    if(file == NULL){
-      exit(-1);
-    }
-
     if(isValidUser(f->esp + 4, &file, sizeof(file)) == -1) {
       exit(-1);
     }
@@ -219,6 +216,9 @@ syscall_handler (struct intr_frame *f UNUSED)
 static int
 get_user (const uint8_t *uaddr)
 {
+
+    if ((void*)uaddr >= PHYS_BASE)
+      return -1; 
     int result;
     asm ("movl $1f, %0; movzbl %1, %0; 1:"
         : "=&a" (result) : "m" (*uaddr));
@@ -257,6 +257,8 @@ int isValidUser(void* pointer, void* destination, size_t size) {
 
 int write(int fd, const void *buffer, unsigned size){
   // if(fd==0 || fd == 2) return -1;
+
+  if (get_user(buffer) == -1 || get_user(buffer + size) == -1) exit(-1);  
   
   if(fd == 1){
     putbuf((const char*)buffer, size);
@@ -281,7 +283,8 @@ int write(int fd, const void *buffer, unsigned size){
 void exit (int status)
 {
     struct thread *cur = thread_current (); 
-    /* Save exit status at process descriptor */
+    
+    cur->t_pcb->exitcode = status;
     printf("%s: exit(%d)\n" , cur -> name , status);
     thread_exit();
 } 
@@ -339,6 +342,7 @@ unsigned tell(int fd){
 
 
 bool create(const char *file, unsigned initial_size){
+  if (get_user(file) == -1) exit(-1); 
   lock_acquire(&locker);
   bool file_status = filesys_create(file, initial_size);
   lock_release(&locker);
@@ -398,6 +402,9 @@ int open(const char *file){
 
 
 int read(int fd, void *buffer, unsigned size){
+
+  if (get_user(buffer) == -1 || get_user(buffer + size - 1) == -1) exit(-1); 
+
   lock_acquire(&locker);
   if (fd == 0)
   {
@@ -430,6 +437,14 @@ int read(int fd, void *buffer, unsigned size){
 }
 
 pid_t exec(const char* cmd_line) {
+
+  int i = 0; 
+  while (i < sizeof(cmd_line)) { 
+    if (get_user(cmd_line + i) == -1){ 
+      exit(-1); 
+    } 
+    i++; 
+  } 
   if(!cmd_line)
 	{
 		return -1;
