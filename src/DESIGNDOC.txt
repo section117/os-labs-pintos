@@ -65,6 +65,26 @@ Also, it uses an additional parameter save_ptr.
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
 
+reading
+-------
+1) Check whether the given pointers are valid. If they are not, exit with code -1.
+2) Acquire the lock (file system lock).
+3) If fd (file_descriptor) equlas 0, then release the lock and retrieve inputs from standard input.
+4) If fd equlas 1 or 2, release the lock and return -1.
+5) Loop through the file_descriptor list until the relevant file to fd is found.
+6) If such a file exists, then release lock, call file_read  function and return the output bytes.
+7) If such file does not exist, release lock and return -1.
+
+writing
+-------
+1) Check whether the given pointers are valid. If they are not, exit with code -1.
+2) If fd (file_descriptor) equlas 1, use putbuf to print the contents in buffer to the console, return -size.
+3) Then, loop through the file_descriptor list to find the relevant file_descriptor of fd.
+4) If such file_descriptor is not found, return -1.
+5) If such ound, then acquire the lock (file system lock).
+6) Then, use file_write to write contents of the buffer to the file.
+7) Release the lock and return the number of bytes written to the file.
+
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
 >> and the greatest possible number of inspections of the page table
