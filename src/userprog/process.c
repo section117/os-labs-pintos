@@ -182,7 +182,6 @@ process_wait (tid_t child_tid UNUSED)
 
 }
 
-/* Free the current process's resources. */
 void
 process_exit (void)
 {

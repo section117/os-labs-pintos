@@ -39,12 +39,6 @@ add them to an array.
 After that, the argument stack will be created by looping through
 the previously said argument array in reverse order.
 
-Arranging in the right order
-............................
-When separating the file_name string to retrieve arguments,
-I used
-
-
 ---- RATIONALE ----
 
 >> A3: Why does Pintos implement strtok_r() but not strtok()?
@@ -69,11 +63,49 @@ Also, it uses an additional parameter save_ptr.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+process.h
+---------
+
+struct file_desc{
+int id;
+struct list_elem elem;
+struct file* file;
+};
+
+This struct is resposnible for keeping file_descriptor per process.
+
+struct process_control_block
+{
+pid_t pid; // The pid of process
+const char* cmdline; 
+struct list_elem elem; // element for child_list
+struct thread* parent_thread; // the parent thread.
+bool waiting; // indicater: parent process is waiting checking this flag.
+bool exited; // indicater: the process is done or not
+
+int32_t exitcode; //represents exit_code
+
+struct semaphore sema_init; 
+struct semaphore sema_wait; 
+};
+
+This struct keeps information about process_control_block. This is important during waiting for child process.
+
+syscall.c
+---------
+struct lock file_sys_lock; //Lock used for file_descriptor
+
+thread.h
+--------
+struct list file_list; 
+struct list pcb_list; //keeps track of the process_control_blocks o a thread
+struct process_control* t_pcb;
+
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
 
-The open files which are associated with a file descriptor are only unique to a single process.
+The open files which are associated with a file descriptor (ile_desc) are only unique to a single process.
 The process struct contains file_descriptor which is associated with an open file.
 Thus, file_descriptor is unique only within process.
 
@@ -133,6 +165,13 @@ In this implementation, when wait is called,
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
 
+In this implementation, before using system calls, I validate the pointers.
+I have written a function isuser to validate these poniters when accessing
+user program memory, so that if an invalid poniter exists, the process will exit
+before using any system calls. Also an error code is returned.
+When such an error is detected I use thread_exit and it will invoke process_exit()
+inside process.c file clearing the allocated resources.
+
 ---- SYNCHRONIZATION ----
 
 >> B7: The "exec" system call returns -1 if loading the new executable
@@ -147,16 +186,52 @@ In this implementation, when wait is called,
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
 
+P calls wait(C) before C exits
+------------------------------
+If another process is already waiting on C, process_wait will return -1 and P will not wait on C.
+Otherwise, P will wait on C. This prevents race conditions.
+
+P calls wait(C) after C exits
+------------------------------
+Since C is already exited, process_wait will return -1 and P will not wait on C. This prevents race conditions.
+
+P terminates without waiting, before C exits
+--------------------------------------------
+If P terminates without waiting before C exits, then the parent_thread of process C will be equlaed to null.
+This helps to avoid race conditions. And also process_exit handles freeing resources.
+
+P terminates without waiting, after C exits
+-------------------------------------------
+Nothing special would happen.
+
+
 ---- RATIONALE ----
 
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
 
+In order to access user_memory from kernel, there are put_user and get_user functions.
+While accessing user_memory, the address should be below PHYS_BASE. Otherwise, it is an invalid address.
+In this case, a page_fault will occur. So I changed the page_fault() function inside exception.c 
+to handle invalid address which is easy.
+
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
 
+Advantages
+----------
+file_desc (file_descriptors) are unique to each open file per process. So this helps in
+avoiding race conditions.
+
+Disadvantages
+-------------
+This way, a single process can only open a single file. So it is unable to open lot of files.
+This is an disadvantage in a large process which requires to open. multiple files.
+
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
+
+Did not change.
 
 			   SURVEY QUESTIONS
 			   ================
