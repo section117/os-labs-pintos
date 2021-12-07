@@ -13,7 +13,6 @@
 typedef int pid_t;
 
 struct lock locker;
-//struct lock lock_filesys;
 
 static void syscall_handler (struct intr_frame *);
 static int get_user (const uint8_t *uaddr);
@@ -29,6 +28,7 @@ bool create(const char *file, unsigned initial_size);
 bool remove(const char *file);
 void close(int fd);
 int open(const char *file);
+int read(int fd, void *buffer, unsigned size);
 
 
 
@@ -37,7 +37,6 @@ syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&locker);
-  lock_init(&lock_filesys);
 }
 
 static void
@@ -147,6 +146,23 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 
   case SYS_READ: {
+    int fd;
+    void * buffer;
+    unsigned int size;
+
+    if(isValidUser(f->esp + 4, &fd, sizeof(fd)) == -1) {
+      exit(-1);
+    }
+
+    if(isValidUser(f->esp + 8, &buffer, sizeof(buffer)) == -1) {
+      exit(-1);
+    }
+
+    if(isValidUser(f->esp + 12, &size, sizeof(size)) == -1) {
+      exit(-1);
+    }
+
+    f->eax = (uint32_t)(fd, buffer, size);
     break;
   }
 
@@ -217,11 +233,25 @@ int isValidUser(void* pointer, void* destination, size_t size) {
 
 
 int write(int fd, const void *buffer, unsigned size){
+  if(fd==0 || fd == 2) return -1;
+  
   if(fd == 1){
     putbuf((const char*)buffer, size);
     return size;
   }
-  return -1;
+
+  struct file_descripter* file_des = getFileDes(fd);
+
+  if(file_des == NULL){
+    return -1;
+  }
+  lock_acquire(&locker);
+
+  int bytes_written = (int) file_write(file_des->file, buffer, size);
+
+  lock_release(&locker);
+  
+  return bytes_written;
 }
 
 
@@ -341,6 +371,39 @@ int open(const char *file){
   lock_release(&locker);
 
   return new_file->id;
+}
+
+
+int read(int fd, void *buffer, unsigned size){
+  lock_acquire(&locker);
+  if (fd == 0)
+  {
+    lock_release(&locker);
+    return (int) input_getc();
+  }
+
+  if (fd == 1 || fd == 2 || list_empty(&thread_current()->file_list))
+  {
+    lock_release(&locker);
+    return -1;
+  }
+
+  struct list_elem *temp;
+
+  for (temp = list_front(&thread_current()->file_list); temp != NULL; temp = temp->next)
+  {
+      struct file_descripter *t = list_entry(temp, struct file_descripter, elem);
+      if (t->id == fd)
+      {
+        lock_release(&locker);
+        int bytes = (int) file_read(t->file, buffer, size);
+        return bytes;
+      }
+  }
+
+  lock_release(&locker);
+
+  return -1;
 }
 
 
