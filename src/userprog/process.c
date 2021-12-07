@@ -21,18 +21,12 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
-/* Starts a new thread running a user program loaded from
-   FILENAME.  The new thread may be scheduled (and may even exit)
-   before process_execute() returns.  Returns the new process's
-   thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
   tid_t tid;
 
-  /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
@@ -42,15 +36,13 @@ process_execute (const char *file_name)
   token_string =strtok_r (file_name, " ", &save_ptr); 
   
 
-  /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (token_string, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
 }
 
-/* A thread function that loads a user process and starts it
-   running. */
+
 static void
 start_process (void *file_name_)
 {
@@ -58,7 +50,7 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
-  /*changing args*/
+  
   char *parse_args[30];
   char counter = 0;
   char *token,*save_ptr;
@@ -68,115 +60,75 @@ start_process (void *file_name_)
       parse_args[counter++]=token;
   }
 
-  /* Initialize interrupt frame and load executable. */
+  
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-  /*
-    set up the stack for the to store arguments in user stack
-  */
+  
   argument_stack(parse_args,counter,&if_.esp);
 
-  /* If load failed, quit. */
+  
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
 
   
-  hex_dump(if_.esp,if_.esp,PHYS_BASE-if_.esp,true);
+  // hex_dump(if_.esp,if_.esp,PHYS_BASE-if_.esp,true);
  
 
-  /* Start the user process by simulating a return from an
-     interrupt, implemented by intr_exit (in
-     threads/intr-stubs.S).  Because intr_exit takes all of its
-     arguments on the stack in the form of a `struct intr_frame',
-     we just point the stack pointer (%esp) to our stack frame
-     and jump to it. */
+  
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
 
 
 
-/* 
-  argument stack setup here add arguments and count of arguments
-  add also passed the stack pointer
-  */
+
   argument_stack(char **args,int count,void **esp){
-    // 1. place the arguments 
+    
 
 
     int arg_addrs[count];
     int length;
     for (int i =count-1 ;i>=0;i--)
     {
-      //get lenght of word add +1 for null charcter
+      
       length  = strlen(args[i])+1;
 
-      /* first growth lenght lenght of stack 
-          esp is currently point at 20 that meant we cannot 
-          allocate value for it
-
-          lenght = 4
-          esp = 20
-          after set esp 20-4 =16 
-              ->               --<--- 20
-                ------ char 1  --<--- 19
-                ------ char 2         18
-                ------ char 3         17
-                ------ char 4  --<--- 16
-      */
       *esp -= length;
 
-      // copy to memory current esp to esp + length
+    
       memcpy(*esp,args[i],length);
 
-      // add the address to the argument stack
+    
       arg_addrs[i] = (int)*esp;
     }  
 
-    // add the 1Byte padding
-    /* adding padding need to be round down the nearest free memory */
+    
       *esp = (int)*esp & 0xfffffffc;
 
-    // palce the arguments address in stack
-      /* to storing address of null charcter we get 4 bytes space  */
       *esp -= 4;
       *(int*)*esp = 0;
       for (int i=count-1; i>=0;i--){
-        /* 
-          when saving address 8 hex address convet to the binary address 
-          one hexa digit can write by the 4 bits so
-          8*4=32 bits --> that means 4bytes for one address storing 
-          so we need to go down 4 bytes for one address allocation
-        */
+        
         *esp -= 4;
         *(int*)*esp = arg_addrs[i];
       }
 
-    // address of first argument
-      /* add another 4 bytes slots */
+    
       *esp -= 4;
       *(int*)*esp = (int)*esp + 4;
 
-    // add the count of arguments --> count
-      /* argument count is also anohter integer that means  4 bytes so need 
-        4bytes memory slots
-       */
+    
       *esp -= 4;
       *(int*)*esp = count;
 
-    // add the  stack header 
-      /*stack header also need to be set as 4 bytes to store integer so need
-      another 4 bytes slotes*/
+    
       *esp -= 4;
-      *(int*)*esp = 0;/* this is fake address  */
-
-      /* esp point out this fake addres so, when it calling it point out this fake
-      address */
+      *(int*)*esp = 0;
       
   }
 
@@ -194,7 +146,11 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  int value = 0;
+  for(int i = 0 ; i < 300000000; i++){
+    value ++;
+  }
+  return 0;
 }
 
 /* Free the current process's resources. */

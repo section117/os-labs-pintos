@@ -8,5 +8,13 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
 
+struct file_descripter
+{
+    int id;
+    struct list_elem elem;
+    struct file* file;
+    
+};
+
+
 #endif /* userprog/process.h */
-//pintos –v -- run 'echo x'
