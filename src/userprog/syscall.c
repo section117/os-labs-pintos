@@ -13,6 +13,7 @@
 typedef int pid_t;
 
 struct lock locker;
+//struct lock lock_filesys;
 
 static void syscall_handler (struct intr_frame *);
 static int get_user (const uint8_t *uaddr);
@@ -36,6 +37,7 @@ syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&locker);
+  lock_init(&lock_filesys);
 }
 
 static void
@@ -312,14 +314,14 @@ int open(const char *file){
 
   if(!file) return -1;
 
-  lock_acquire(&locker;
+  lock_acquire(&locker);
 
   struct file* f = filesys_open(file);
 
   /* If no file was created, then return -1. */
   if(f == NULL)
   {
-    lock_release(&lock_filesys);
+    lock_release(&locker);
     return -1;
   }
 
@@ -331,7 +333,7 @@ int open(const char *file){
   if(list_empty(file_list)){
     new_file->id = 3;
   }else{
-    struct file_desctripter* file_des = list_entry(list_end(file_list), struct file_descripter, elem);
+    struct file_descripter* file_des = list_entry(list_end(file_list), struct file_descripter, elem);
     new_file->id = file_des->id + 1;
   }
   
