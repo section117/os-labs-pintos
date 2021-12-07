@@ -34,28 +34,28 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  char *token_string;
+  char *command_name;
   char *save_ptr;
-  token_string =strtok_r (file_name, " ", &save_ptr); 
+  //This contains the first split string
+  command_name =strtok_r (file_name, " ", &save_ptr); 
 
   struct process_control_block* pcb = palloc_get_page(0);
 
   pcb->pid = -1;
   pcb->parent_thread = thread_current();
 
-  sema_init(&pcb->sema_initialization, 0);
+  sema_init(&pcb->sema_init, 0);
   sema_init(&pcb->sema_wait, 0);
 
   pcb->waiting = false;
   pcb->exited = false;
-  // pcb->orphan = false;
 
   pcb->cmdline = fn_copy;
 
 
-  tid = thread_create (token_string, PRI_DEFAULT, start_process, pcb);
+  tid = thread_create(command_name, PRI_DEFAULT, start_process, pcb);
   
-  sema_down(&pcb->sema_initialization);
+  sema_down(&pcb->sema_init);
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
@@ -77,14 +77,15 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
-  
-  char *parse_args[50];
+  //This keeps the splitted strings of arguments
+  char *arguments_retrieved[50];
   char counter = 0;
-  char *token,*save_ptr;
+  char *split_str,*save_ptr;
 
-  for (token = strtok_r(file_name," ",&save_ptr);token != NULL;
-  token = strtok_r(NULL," ",&save_ptr)) {
-      parse_args[counter++]=token;
+  //This loop will go through the agument string and split and add to arguments_retrieved
+  for (split_str = strtok_r(file_name," ",&save_ptr);split_str != NULL;
+  split_str = strtok_r(NULL," ",&save_ptr)) {
+      arguments_retrieved[counter++]=split_str;
   }
 
   
@@ -98,64 +99,48 @@ start_process (void *file_name_)
   if (success) {
     pcb->pid = thread_current()->tid;
     thread_current()->t_pcb = pcb; 
-    arg_stack_call(parse_args,counter,&if_.esp);
+    argument_stack_create(arguments_retrieved,counter,&if_.esp);
   }
 
   
-  sema_up(&pcb->sema_initialization);
+  sema_up(&pcb->sema_init);
 
   // palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
 
-  
-  // hex_dump(if_.esp,if_.esp,PHYS_BASE-if_.esp,true);
- 
-
-  
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
 
 
 
-
-  arg_stack_call(char **arguments,int count,void **esp){
+  //This function will create the argument stack
+  argument_stack_create(char **arguments,int count,void **esp){
     
-
-
-    int arg_address[count];
+    int argument_address_arr[count];
     int size;
+    //Setting up address array
     for (int i =count-1 ;i>=0;i--)
     {
-      
       size  = strlen(arguments[i])+1;
       *esp -= size;
       memcpy(*esp,arguments[i],size);
-      arg_address[i] = (int)*esp;
+      argument_address_arr[i] = (int)*esp;
       
     }  
-
-    
       *esp = (int)*esp & 0xfffffffc;
-
       *esp -= 4;
       *(int*)*esp = 0;
       for (int i=count-1; i>=0;i--){
-        
         *esp -= 4;
-        *(int*)*esp = arg_address[i];
+        *(int*)*esp = argument_address_arr[i];
       }
-
     
       *esp -= 4;
       *(int*)*esp = (int)*esp + 4;
-
-    
       *esp -= 4;
       *(int*)*esp = count;
-
-    
       *esp -= 4;
       *(int*)*esp = 0;
       
@@ -186,8 +171,6 @@ process_wait (tid_t child_tid UNUSED)
   }
 
   if(pcb == NULL || pcb->pid != child_tid || pcb->waiting || pcb->exited) return -1;
-
-
 
   pcb->waiting = true;
 
