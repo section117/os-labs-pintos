@@ -7,6 +7,8 @@
 #include "userprog/process.h"
 #include "filesys/file.h"
 #include "threads/synch.h"
+#include "filesys/filesys.h"
+#include "threads/malloc.h"
 
 typedef int pid_t;
 
@@ -20,6 +22,11 @@ int write(int fd, const void *buffer, unsigned size);
 void exit (int status);
 void seek(int fd, unsigned position);
 struct file_descripter* getFileDes(int fd);
+int filesize(int fd);
+unsigned tell(int fd);
+bool create(const char *file, unsigned initial_size);
+bool remove(const char *file);
+void close(int fd);
 
 
 
@@ -95,7 +102,59 @@ syscall_handler (struct intr_frame *f UNUSED)
     seek(fd, position);
     break;
   }
+
+  case SYS_CREATE:{
+    char* file;
+    unsigned initial_size;
+    if(isValidUser(f->esp + 4, &file, sizeof(file)) == -1) {
+      exit(-1);
+    }
+    if(isValidUser(f->esp + 8, &initial_size, sizeof(initial_size)) == -1) {
+      exit(-1);
+    }
+    f->eax = create(file, initial_size);
+    break;
+  }
+
+  case SYS_REMOVE:{
+    char* file;
+    if(isValidUser(f->esp + 4, &file, sizeof(file)) == -1) {
+      exit(-1);
+    }
+    f->eax = remove(file);
+    break;
+  }
+
+  case SYS_OPEN: {
+    break;
+  }
   
+  case SYS_FILESIZE:{
+    int fd;
+    if(isValidUser(f->esp + 4, &fd, sizeof(fd)) == -1) {
+      exit(-1);
+    }
+    f->eax = (uint32_t)filesize(fd);
+    break;
+  }
+
+  case SYS_READ: {
+    break;
+  }
+
+  case SYS_TELL: {
+    int fd;
+    if(isValidUser(f->esp + 4, &fd, sizeof(fd)) == -1) {
+      exit(-1);
+    }
+    f->eax = (uint32_t)tell(fd);
+    break;
+  }
+
+  case SYS_CLOSE: {
+    break;
+  }
+
   default:{
     printf("not working");
     break;
@@ -197,6 +256,52 @@ struct file_descripter* getFileDes(int fd) {
   }
   return NULL;
 }
+
+int filesize(int fd){
+  struct file_descripter* file_des = getFileDes(fd);
+  if(file_des == NULL) return -1;
+  lock_acquire(&locker);
+  off_t length = file_length(file_des->file);
+  lock_release(&locker);
+  return length;
+}
+
+
+unsigned tell(int fd){
+  struct file_descripter* file_des = getFileDes(fd);
+  if(file_des == NULL) return -1;
+  lock_acquire(&locker);
+  off_t t = file_tell(file_des->file);
+  lock_release(&locker);
+  return t;
+}
+
+
+bool create(const char *file, unsigned initial_size){
+  lock_acquire(&locker);
+  bool file_status = filesys_create(file, initial_size);
+  lock_release(&locker);
+  return file_status;
+}
+
+bool remove(const char *file){
+  lock_acquire(&locker);
+  bool removed = filesys_remove(file);
+  lock_release(&locker);
+  return removed;
+}
+
+
+void close(int fd) {
+  struct file_descripter* file_des = getFileDes(fd);
+  if(file_des == NULL) return -1;
+  lock_acquire(&locker);
+  file_close(file_des->file);
+  list_remove(&file_des->elem);
+  free(file_des);
+  lock_release(&locker); 
+}
+
 
 
 
