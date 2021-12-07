@@ -30,6 +30,8 @@ void close(int fd);
 int open(const char *file);
 int read(int fd, void *buffer, unsigned size);
 pid_t exec(const char* cmd_line);
+int isValidUser(void* pointer, void* destination, size_t size);
+int wait(pid_t pid);
 
 
 
@@ -51,7 +53,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   {
 
   case SYS_EXEC: {
-    char* cmd_line;
+    const char* cmd_line;
     
     if(isValidUser(f->esp + 4, &cmd_line, sizeof(cmd_line)) == -1) {
       exit(-1);
@@ -109,7 +111,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       exit(-1);
     }
 
-    if(isValidUser(f->esp + 4, &position, sizeof(position)) == -1) {
+    if(isValidUser(f->esp + 8, &position, sizeof(position)) == -1) {
       exit(-1);
     }
     seek(fd, position);
@@ -119,6 +121,11 @@ syscall_handler (struct intr_frame *f UNUSED)
   case SYS_CREATE:{
     char* file;
     unsigned initial_size;
+
+    if(file == NULL){
+      exit(-1);
+    }
+
     if(isValidUser(f->esp + 4, &file, sizeof(file)) == -1) {
       exit(-1);
     }
@@ -173,7 +180,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       exit(-1);
     }
 
-    f->eax = (uint32_t)(fd, buffer, size);
+    f->eax = (uint32_t)read(fd, buffer, size);
     break;
   }
 
@@ -242,14 +249,14 @@ int isValidUser(void* pointer, void* destination, size_t size) {
     if(value == -1){
       exit(-1);
     }
-    *(char*) (destination + j) = value&0xff;
+    *(char*) (destination + j) = value & 0xff;
   }
   return (int) size;
 }
 
 
 int write(int fd, const void *buffer, unsigned size){
-  if(fd==0 || fd == 2) return -1;
+  // if(fd==0 || fd == 2) return -1;
   
   if(fd == 1){
     putbuf((const char*)buffer, size);
@@ -287,7 +294,7 @@ int wait(pid_t pid) {
 
 void seek(int fd, unsigned position) {
   struct file_descripter* file_des = getFileDes(fd);
-  if(file_des == NULL) return -1;
+  if(file_des == NULL) return;
   lock_acquire(&locker);
   file_seek(file_des->file, position);
   lock_release(&locker);
@@ -348,7 +355,7 @@ bool remove(const char *file){
 
 void close(int fd) {
   struct file_descripter* file_des = getFileDes(fd);
-  if(file_des == NULL) return -1;
+  if(file_des == NULL) return;
   lock_acquire(&locker);
   file_close(file_des->file);
   list_remove(&file_des->elem);
@@ -358,7 +365,7 @@ void close(int fd) {
 
 int open(const char *file){
 
-  if(!file) return -1;
+  if(file == NULL) return -1;
 
   lock_acquire(&locker);
 
@@ -379,7 +386,7 @@ int open(const char *file){
   if(list_empty(file_list)){
     new_file->id = 3;
   }else{
-    struct file_descripter* file_des = list_entry(list_end(file_list), struct file_descripter, elem);
+    struct file_descripter* file_des = list_entry(list_back(file_list), struct file_descripter, elem);
     new_file->id = file_des->id + 1;
   }
   
@@ -418,7 +425,7 @@ int read(int fd, void *buffer, unsigned size){
   }
 
   lock_release(&locker);
-
+  ////
   return -1;
 }
 
@@ -427,13 +434,14 @@ pid_t exec(const char* cmd_line) {
 	{
 		return -1;
 	}
-  
+  lock_acquire(&locker);
   /* Get and return the PID of the process that is created. */
 	pid_t child_tid = process_execute(cmd_line);
-  
+  lock_release(&locker);
 	return child_tid;
 }
 
 
 
 
+ //comment

@@ -150,6 +150,9 @@ process_wait (tid_t child_tid UNUSED)
   for(int i = 0 ; i < 300000000; i++){
     value ++;
   }
+  // while(1){
+
+  // }
   return 0;
 }
 
