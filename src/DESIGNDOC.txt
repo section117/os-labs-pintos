@@ -22,6 +22,8 @@
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+None
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe how you implemented argument parsing.  How do
@@ -29,8 +31,19 @@
 >> How do you avoid overflowing the stack page?
 
 The process_execute function has an argument called file_name. Here file_name contains,
-both the command and arguments. Inside this function, we seprate this file_name string so that we 
-get the command and arguments.
+both the command and arguments. Inside this function, we seprate this file_name string (using strtok_r) so that we 
+get the command and arguments. Then use thread_create with the name of that command and
+passs the file_name as an argument.
+After that start_process will run. In that function we use strtok_r and separate the arguments,
+add them to an array.
+After that, the argument stack will be created by looping through
+the previously said argument array in reverse order.
+
+Arranging in the right order
+............................
+When separating the file_name string to retrieve arguments,
+I used
+
 
 ---- RATIONALE ----
 
@@ -59,6 +72,10 @@ Also, it uses an additional parameter save_ptr.
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
+
+The open files which are associated with a file descriptor are only unique to a single process.
+The process struct contains file_descriptor which is associated with an open file.
+Thus, file_descriptor is unique only within process.
 
 ---- ALGORITHMS ----
 
@@ -94,6 +111,13 @@ writing
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
+
+In this implementation, when wait is called,
+1) Get the pcb_list associated with the current thread.
+2) Then, iterate over pcb_list and check whether a child process exists such that process_pid == child_tid.
+3) If such child process doesn't exist OR that child process is already waiting OR already exited, return -1.
+4) Else, the child process's waiting is set to true and the current process will wait until the child process exits.
+5) Once the child process is exited, it will be removed from the pcb_list and exit_code will be returned.
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
